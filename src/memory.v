@@ -6,6 +6,16 @@ struct Memory {
 		mem1 []u8
 		mem2 []u8
 		exi0csr u32
+		exi1csr u32
+		exi2csr u32
+		exi0cr u32
+		exi1cr u32
+		exi2cr u32
+		exi0data u32
+		exi1data u32
+		exi2data u32
+		intsr u32
+		intmr u32
 		logger &Logger
 }
 
@@ -16,7 +26,18 @@ fn (mut m Memory) init(logger &Logger) {
 	m.mem1 = []u8{len: 0x01800000, init: 0}
 	m.mem2 = []u8{len: 0x04000000, init: 0}
 	m.exi0csr = 0
-	
+	m.exi1csr = 0
+	m.exi2csr = 0
+	m.exi0data = 0
+	m.exi1data = 0
+	m.exi2data = 0
+	m.intsr = 0
+	m.intmr = 0
+}
+
+fn (mut m Memory) dump_memory() {
+	os.write_file_array("ramdump.bin", m.mem1) or { panic(err) }
+	m.logger.log("Ram dumped", "Memory")
 }
 
 
@@ -109,7 +130,15 @@ fn (mut m Memory) load32(address u32) u32 {
             value |= u32(m.mem2[offset + 3]) << 0
 			return value
 		}
+		address == 0xcc00302c { return 2 << 28 } // bits 28-31: console type
+		address == 0xCC003000 { return m.intsr }
+		address == 0xCC003004 { return m.intmr }
 		address == 0xCC006800 { return m.exi0csr }
+		address == 0xCC006814 { return m.exi1csr }
+		address == 0xCC006828 { return m.exi2csr }
+		address == 0xCC00680c { return m.exi0cr }
+		address == 0xCC006820 { return m.exi1cr }
+		address == 0xCC006834 { return m.exi2cr }
 		else { m.logger.log("Unhandled load32 ${address:08x}", "Critical")  return 0}
 	}
 }
@@ -124,7 +153,7 @@ fn (mut m Memory) load16(address u32) u16 {
             value |= u16(m.mem2[offset + 1]) << 0
 			return value
 		} 
-		else { m.logger.log("Unhandled load8 ${address:08x}", "Critical")  return 0}
+		else { m.logger.log("Unhandled load16 ${address:08x}", "Critical")  return 0}
 	}
 }
 
@@ -149,7 +178,17 @@ fn (mut m Memory) store32(address u32, value u32) {
             m.mem1[offset + 2] = u8((value & 0xFF00) >> 8)
             m.mem1[offset + 3] = u8((value & 0xFF) >> 0)
 		} 
+		address == 0xcc003000 { m.intsr = value } // Interrupt cause
+		address == 0xcc003004 { m.intmr = value } // Interrupt mask
 		address == 0xCC006800 { m.exi0csr = value }
+		address == 0xcc006814 { m.exi1csr = value }
+		address == 0xcc006828 { m.exi2csr = value }
+		address == 0xcc006810 { m.exi0data = value }
+		address == 0xcc006824 { m.exi1data = value }
+		address == 0xcc006838 { m.exi2data = value }
+		address == 0xCC00680c { m.exi0cr = value }
+		address == 0xCC006820 { m.exi1cr = value }
+		address == 0xCC006834 { m.exi2cr = value }
 		else { m.logger.log("Unhandled store32 addr ${address:08x} value ${value:08x}", "Critical") }
 	}
 }

@@ -22,6 +22,7 @@ fn main() {
 	memory.init(&logger)
 
 	entry_point := memory.load_dol(dol_name)
+	//memory.dump_memory()
 
 	mut broadway := PPC{memory: 0, logger: 0}
 	broadway.init(&memory, &logger)
@@ -31,6 +32,8 @@ fn main() {
 	for {
 		if broadway.running == true {
 			broadway.tick()
+		} else {
+			exit(0)
 		}
 	}
 }

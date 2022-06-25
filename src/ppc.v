@@ -25,6 +25,10 @@ const(
 	srr1_r = 27
 )
 
+enum Exception {
+	syscall
+}
+
 struct Xer {
 	mut:
 		so bool
@@ -180,7 +184,7 @@ fn (mut p PPC) decode_and_execute() {
 	match p.opcode.opcd {
 		0b000100 { 
 			match p.opcode.secondary {
-				0b0001001000 { p.op_ps_mr() p.opcode_name = "ps_mr" }
+				0b0001001000 { p.op_ps_mr() p.opcode_name = "ps_mrx" }
 				else { p.logger.log("${p.pc:08x}(${p.instruction_count}) Unhandled 0b000100 (4) secondary 0b${p.opcode.secondary:010b} (${p.opcode.secondary}) opcode ${p.opcode.value:08x}", "Critical") p.running = false }
 			}
 		}
@@ -197,6 +201,7 @@ fn (mut p PPC) decode_and_execute() {
 		0b011001 { p.op_oris() p.opcode_name = "oris" }
 		0b011010 { p.op_xori() p.opcode_name = "xori" }
 		0b010000 { p.op_bcx() p.opcode_name = "bcx" }
+		0b010001 { p.op_sc() p.opcode_name = "sc" }
 		0b010011 {
 			match p.opcode.secondary {
 				0b0000010000 { p.op_bclrx() p.opcode_name = "bclrx" }	
@@ -258,6 +263,7 @@ fn (mut p PPC) decode_and_execute() {
 		0b100101 { p.op_stwu() p.opcode_name = "stwu" }
 		0b100110 { p.op_stb() p.opcode_name = "stb" }
 		0b101000 { p.op_lhz() p.opcode_name = "lhz" }
+		0b101010 { p.op_lha() p.opcode_name = "lha" }
 		0b101100 { p.op_sth() p.opcode_name = "sth" }
 		0b101110 { p.op_lmw() p.opcode_name = "lmw" }
 		0b101111 { p.op_stmw() p.opcode_name = "stmw" }
@@ -284,11 +290,11 @@ fn (mut p PPC) tick() {
 	p.pc += 4
 	p.decode_and_execute()
 	p.instruction_count += 1
-	if p.instruction_count == 387600 {
-		p.logger.logging_enabled = true
-	}
+	/*if p.instruction_count >= 500000 {
+		println("${p.pc:08x}")
+	}*/
 	if p.running == true {
-		p.logger.log("${p.instruction_count:8} | ${p.prev_pc:08x} ${p.opcode_name}", "Broadway")
+		p.logger.log("${p.instruction_count} ${p.prev_pc:08X} ${p.opcode.value:08X} (${p.opcode.opcd}, ${p.opcode.secondary}) ${p.opcode_name} ${p.gprs}", "Broadway")
 	}
 	p.logger.out()
 }

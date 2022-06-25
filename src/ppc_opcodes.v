@@ -1,6 +1,5 @@
 import math
 
-
 fn (mut p PPC) op_blank() {
 
 }
@@ -33,8 +32,50 @@ fn (mut p PPC) set_conditions(result u32, reg u32) {
 	p.cr |= (p.get_sprs(xer_r) >> 31) << (28 - (4*reg))
 }
 
+fn (mut p PPC) set_conditions_cmp(a u32, b u32, reg u32, signed bool) {
+	p.cr &= ~(0b1111 << ((7 - reg)*4))
+	if signed == true {
+		if int(a) < int(b) {
+			p.cr |= (1 << (31 - (4*reg)))
+		} else if int(a) > int(b) {
+			p.cr |= (1 << (30 - (4*reg)))
+		} else {
+			p.cr |= (1 << (29 - (4*reg)))
+		}
+		p.cr |= (p.get_sprs(xer_r) >> 31) << (28 - (4*reg))
+	} else {
+		if a < b {
+			p.cr |= (1 << (31 - (4*reg)))
+		} else if a > b {
+			p.cr |= (1 << (30 - (4*reg)))
+		} else {
+			p.cr |= (1 << (29 - (4*reg)))
+		}
+		p.cr |= (p.get_sprs(xer_r) >> 31) << (28 - (4*reg))
+	}
+}
+
+
 fn (mut p PPC) dequantized(mem u32, lt u32, ls u32) f32 {
 	return f32(mem) * math.powf(2, -1*p.scaling_factor[ls])
+}
+
+fn (mut p PPC) exception(exception_type Exception) {
+	match exception_type {
+		.syscall {
+			p.set_sprs(srr0_r, p.pc)
+			p.set_sprs(srr1_r, p.msr.value & 0x87C0FFFF)
+
+            p.msr.set_value(p.msr.value & ~u32(1))
+            if (p.msr.value & (1 << 16)) != 0 {
+                p.msr.set_value(p.msr.value | 1)
+			}
+
+            p.msr.set_value(p.msr.value & ~u32(0x04EF36))
+            p.pc = 0x00000C00
+		}
+		// else { p.logger.log("Unhandled exception type ${exception_type}", "Critical") }
+	}
 }
 
 fn (mut p PPC) op_ps_mr() {
@@ -69,7 +110,7 @@ fn (mut p PPC) op_cmpli() {
 	crfd := p.opcode.b6_10 >> 2
 	a := p.gprs[p.opcode.b11_15]
 	uimm := p.opcode.b16_31
-	p.set_conditions(a - uimm, crfd)
+	p.set_conditions_cmp(a, uimm, crfd, false)
 }
 
 fn (mut p PPC) op_cmpi() {
@@ -77,7 +118,7 @@ fn (mut p PPC) op_cmpi() {
 	a := p.gprs[p.opcode.b11_15]
 	simm := exts16(p.opcode.b16_31)
 	p.logger.log("Comparing ${a:08x}(reg ${p.opcode.b11_15}) to ${simm:08x}", "Args")
-	p.set_conditions(u32(int(a) - int(simm)), crfd)
+	p.set_conditions_cmp(a, simm, crfd, true)
 }
 
 fn (mut p PPC) op_addic() {
@@ -189,6 +230,10 @@ fn (mut p PPC) op_bcx() {
 
 		p.logger.log("Setting pc to ${p.pc:08x}", "Args")
 	}
+}
+
+fn (mut p PPC) op_sc() {
+	p.exception(Exception.syscall)
 }
 
 fn (mut p PPC) op_bclrx() {
@@ -445,7 +490,7 @@ fn (mut p PPC) op_cmpl() {
 	a := p.gprs[p.opcode.b11_15]
 	b := p.gprs[p.opcode.b16_20]
 	crfd := p.opcode.b6_10 >> 2
-	p.set_conditions(a - b, crfd)
+	p.set_conditions_cmp(a, b, crfd, false) // ??? TODO: is thhis right
 }
 
 fn (mut p PPC) op_subfx() {
@@ -740,7 +785,7 @@ fn (mut p PPC) op_divwux() {
 fn (mut p PPC) op_mtspr() {
 	s := p.opcode.b6_10
 	spr := p.opcode.b11_20
-    index := ((spr & 0x1F) << 5) + ((spr >> 5) & 0x1F)
+    index := ((spr & 0x1F) << 5) | ((spr >> 5) & 0x1F)
     p.set_sprs(index, p.gprs[s])
 	p.logger.log("Setting sprs[${index}] to reg ${s}(${p.get_sprs(index):08x})", "Args")
 }
@@ -851,6 +896,17 @@ fn (mut p PPC) op_lhz() {
 	}
 	p.gprs[d] = u32(p.memory.load16(addr))
 	p.logger.log("loading ${p.gprs[d]:04x}(reg ${d}) from address ${addr:08x}", "Args")
+}
+
+fn (mut p PPC) op_lha() {
+	d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	d2 := p.opcode.b16_31
+	mut addr := exts16(d2)
+	if a != 0 {
+		addr += p.gprs[a]
+	}
+	p.gprs[d] = exts16(u32(p.memory.load16(addr)))
 }
 
 fn (mut p PPC) op_sth() {

@@ -1,5 +1,6 @@
 import thecodrr.crayon
 import arrays
+import os
 
 // Sign extensions, copied from dolphin
 
@@ -41,6 +42,7 @@ struct Logger {
 		log_types map[string]string
 		logs []string
 		logging_enabled bool
+		trace_file os.File
 }
 
 /* Colors for logger
@@ -61,11 +63,12 @@ fn (mut l Logger) init(logging_enabled bool) {
 	l.log_types['Memory'] = "rgb(242,232,206)"
 	l.log_types['Args'] = "rgb(220,208,234)"
 	l.logging_enabled = logging_enabled
+	l.trace_file = os.open_append("tracefile.txt") or { panic(err) }
 }
 
 fn (mut l Logger) log(message string, log_type string) {
 	if l.logging_enabled || log_type == "Critical" {
-		if log_type in l.log_types {
+		if log_type in l.log_types && log_type != "Args" {
 			crayon_string := '{${l.log_types[log_type]} ${log_type:10}: ${message}\n}' 
 			l.logs << crayon.color(crayon_string)
 		}
@@ -78,6 +81,10 @@ fn (mut l Logger) out() {
 		arrays.rotate_right(mut l.logs, 1)
 		for log in l.logs {
 			print(log)
+			if false {
+				// Write to trace file
+				l.trace_file.write_string(log.split(": ")[1]) or {panic(err)}
+			}
 		}
 		l.logs = []string{len: 0}
 	}

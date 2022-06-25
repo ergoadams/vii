@@ -1,2 +1,6 @@
 dols/
 .vscode/
+*.py
+*.txt
+*.bin
+*.i64
