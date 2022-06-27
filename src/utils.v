@@ -42,6 +42,7 @@ struct Logger {
 		log_types map[string]string
 		logs []string
 		logging_enabled bool
+		tracing_enabled bool
 		trace_file os.File
 }
 
@@ -54,7 +55,7 @@ struct Logger {
 (241,220,197) Almond				| Broadway
 */
 
-fn (mut l Logger) init(logging_enabled bool) {
+fn (mut l Logger) init(logging_enabled bool, tracing_enabled bool) {
 	println("Initializing logger")
 	l.log_types['Warning'] = "yellow"
 	l.log_types['Critical'] = "bold.red"
@@ -63,6 +64,7 @@ fn (mut l Logger) init(logging_enabled bool) {
 	l.log_types['Memory'] = "rgb(242,232,206)"
 	l.log_types['Args'] = "rgb(220,208,234)"
 	l.logging_enabled = logging_enabled
+	l.tracing_enabled = tracing_enabled
 	l.trace_file = os.open_append("tracefile.txt") or { panic(err) }
 }
 
@@ -80,10 +82,12 @@ fn (mut l Logger) out() {
 	if l.logs.len > 0 {
 		arrays.rotate_right(mut l.logs, 1)
 		for log in l.logs {
-			print(log)
-			if false {
+			
+			if l.tracing_enabled {
 				// Write to trace file
 				l.trace_file.write_string(log.split(": ")[1]) or {panic(err)}
+			} else {
+				print(log)
 			}
 		}
 		l.logs = []string{len: 0}

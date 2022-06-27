@@ -214,6 +214,7 @@ fn (mut p PPC) decode_and_execute() {
 		0b010100 { p.op_rlwimix() p.opcode_name = "rlwimix"}
 		0b010101 { p.op_rlwinmx() p.opcode_name = "rlwinmx"}
 		0b011100 { p.op_andi() p.opcode_name = "andi"}
+		0b011101 { p.op_andis() p.opcode_name = "andis"}
 		0b011111 { 
 			match p.opcode.secondary {
 				0b0000000000 { p.op_cmp() p.opcode_name = "cmp" }
@@ -234,7 +235,7 @@ fn (mut p PPC) decode_and_execute() {
 				0b0001111100 { p.op_norx() p.opcode_name = "norx" }	
 				0b0010001000 { p.op_subfex() p.opcode_name = "subfex" }	
 				0b0010001010 { p.op_addex() p.opcode_name = "addex" }	
-				0b0010010000 { p.op_mtmsr() p.opcode_name = "mtcrf" }	
+				0b0010010000 { p.op_mtcrf() p.opcode_name = "mtcrf" }	
 				0b0010010010 { p.op_mtmsr() p.opcode_name = "mtmsr" }	
 				0b0010010111 { p.op_stwx() p.opcode_name = "stwx" }	
 				0b0011001010 { p.op_addzex() p.opcode_name = "addzex" }	

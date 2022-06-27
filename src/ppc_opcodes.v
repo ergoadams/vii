@@ -66,12 +66,12 @@ fn (mut p PPC) exception(exception_type Exception) {
 			p.set_sprs(srr0_r, p.pc)
 			p.set_sprs(srr1_r, p.msr.value & 0x87C0FFFF)
 
-            p.msr.set_value(p.msr.value & ~u32(1))
+            p.msr.set_value(p.msr.value & (~u32(1)))
             if (p.msr.value & (1 << 16)) != 0 {
                 p.msr.set_value(p.msr.value | 1)
 			}
 
-            p.msr.set_value(p.msr.value & ~u32(0x04EF36))
+            p.msr.set_value(p.msr.value & (~u32(0x04EF36)))
             p.pc = 0x00000C00
 		}
 		// else { p.logger.log("Unhandled exception type ${exception_type}", "Critical") }
@@ -91,7 +91,7 @@ fn (mut p PPC) op_ps_mr() {
 
 fn (mut p PPC) op_mulli() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
+	a := p.opcode.b11_15
 	simm := p.opcode.b16_31
     result := u64(i64(int(p.gprs[a])) * i64(int(simm)))
 	p.gprs[d] = u32(result & 0xffffffff)
@@ -99,7 +99,7 @@ fn (mut p PPC) op_mulli() {
 
 fn (mut p PPC) op_subfic() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
+	a := p.opcode.b11_15
 	simm := p.opcode.b16_31
 	result := u64(~p.gprs[a]) + u64(exts16(simm)) + 1
     p.gprs[d] = u32(result & 0xffffffff)
@@ -262,7 +262,7 @@ fn (mut p PPC) op_bclrx() {
 
 fn (mut p PPC) op_rfi() {
 	mask := u32(0x87C0FFFF)
-	p.msr.set_value(((p.msr.value & ~mask) | (p.get_sprs(srr1_r) & mask)) & 0xFFFBFFFF)
+	p.msr.set_value(((p.msr.value & (~mask)) | (p.get_sprs(srr1_r) & mask)) & 0xFFFBFFFF)
 	p.pc = (p.get_sprs(srr0_r) >> 2) << 2
 	p.logger.log("New pc ${p.pc:08x}", "Args")
 }
@@ -366,6 +366,16 @@ fn (mut p PPC) op_andi() {
 	p.logger.log("Setting conditions", "Args")
 }
 
+fn (mut p PPC) op_andis() {
+	s := p.opcode.b6_10
+	a :=p.opcode.b11_15
+	uimm := p.opcode.b16_31 << 16
+	p.gprs[a] = p.gprs[s] & uimm
+	p.logger.log("${p.gprs[s]:08x} & ${uimm:08x} = ${p.gprs[a]:08x}(reg ${a})", "Args")
+	p.set_conditions(p.gprs[a], 0)
+	p.logger.log("Setting conditions", "Args")
+}
+
 fn (mut p PPC) op_cmp() {
 	a := p.gprs[p.opcode.b11_15]
 	b := p.gprs[p.opcode.b16_20]
@@ -375,8 +385,8 @@ fn (mut p PPC) op_cmp() {
 
 fn (mut p PPC) op_subfcx() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	oe := ((p.opcode.b21_25 >> 4) & 1) != 0
 	rc := p.opcode.b31
 	result := u64(~p.gprs[a]) + u64(p.gprs[b]) + 1
@@ -395,8 +405,8 @@ fn (mut p PPC) op_subfcx() {
 
 fn (mut p PPC) op_addcx() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	oe := ((p.opcode.b21_25 >> 4) & 1) != 0
 	rc := p.opcode.b31
 	result := u64(p.gprs[a]) + u64(p.gprs[b])
@@ -415,12 +425,12 @@ fn (mut p PPC) op_addcx() {
 	}
 }
 
-fn (mut p PPC) op_mulhwux() {
+fn (mut p PPC) op_mfcr() {
 	d := p.opcode.b6_10
 	p.gprs[d] = p.cr
 }
 
-fn (mut p PPC) op_mfcr() {
+fn (mut p PPC) op_mulhwux() {
 	d := p.opcode.b6_10
 	a := p.opcode.b11_15
 	b := p.opcode.b16_20
@@ -462,7 +472,7 @@ fn (mut p PPC) op_cntlzwx() {
 	rc := p.opcode.b31
 	mut count := u32(0)
 	for n in 0..32 {
-		if (p.gprs[s] & (1 << (31 - n))) == 1 {
+		if (p.gprs[s] & (1 << (31 - n))) != 0 {
 			break
 		}
 		count += 1
@@ -517,7 +527,7 @@ fn (mut p PPC) op_andcx() {
 	a :=p.opcode.b11_15
 	b := p.opcode.b16_20
 	rc := p.opcode.b31
-	p.gprs[a] = p.gprs[s] & ~p.gprs[b]
+	p.gprs[a] = p.gprs[s] & (~p.gprs[b])
 	p.logger.log("${p.gprs[s]:08x}(reg ${s}) & ~${p.gprs[b]:08x}(reg ${b}) = ${p.gprs[a]:08x}(reg ${a})", "Args")
 	if rc == true {
 		p.set_conditions(p.gprs[a], 0)
@@ -555,8 +565,8 @@ fn (mut p PPC) op_negx() {
 
 fn (mut p PPC) op_norx() {
 	s := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	rc := p.opcode.b31
 
 	p.gprs[a] = ~(p.gprs[s] | p.gprs[b])
@@ -568,8 +578,8 @@ fn (mut p PPC) op_norx() {
 
 fn (mut p PPC) op_subfex() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	oe := (p.opcode.b21_25 >> 4) != 0
 	rc := p.opcode.b31
 	mut result := u64(0)
@@ -594,8 +604,8 @@ fn (mut p PPC) op_subfex() {
 
 fn (mut p PPC) op_addex() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	oe := (p.opcode.b21_25 >> 4) != 0
 	rc := p.opcode.b31
 	mut result := u64(0)
@@ -682,8 +692,8 @@ fn (mut p PPC) op_mtsr() {
 
 fn (mut p PPC) op_mullwx() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	oe := ((p.opcode.b21_25 >> 4) & 1) != 0
 	rc := p.opcode.b31
     result := i64(int(p.gprs[a])) * i64(int(p.gprs[b]))
@@ -720,12 +730,13 @@ fn (mut p PPC) op_addx() {
 
 fn (mut p PPC) op_lhzx() {
 	d := p.opcode.b6_10
-	a := p.opcode.b6_10
-	b := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
 	mut addr := p.gprs[b]
 	if a != 0 {
 		addr += p.gprs[a]
 	}
+	println("${addr:08x}")
 	p.gprs[d] = u32(p.memory.load16(addr))
 }
 

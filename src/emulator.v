@@ -6,7 +6,8 @@ import os
 fn main() {
 	mut logger := Logger{}
 	logging_enabled := false
-	logger.init(logging_enabled)
+	tracing_enabled := false
+	logger.init(logging_enabled, tracing_enabled)
 
 	mut dol_name := "dols/triangle.dol"
 	if os.args.len == 2 {
