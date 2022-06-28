@@ -70,7 +70,6 @@ fn (mut m Memory) load_dol(dol_path string) u32 {
 	m.logger.log("BSS addr:    0x${bss_addr:x}", "Memory")
 	m.logger.log("BSS size:    0x${bss_size:x}", "Memory")
 	m.logger.log("Entry point: 0x${entry_point:x}\n", "Memory")
-
 	for i in 0..7 {
 		offset := text_offsets[i]
 		size := text_size[i]
@@ -82,8 +81,10 @@ fn (mut m Memory) load_dol(dol_path string) u32 {
 			}
 		}
 	}
-
-	for i in 0..7 {
+	println(data_offsets)
+	println(data_size)
+	println(data_addr)
+	for i in 0..11 {
 		offset := data_offsets[i]
 		size := data_size[i]
 		write_addr := data_addr[i] - 0x80000000 // The code will be copied into RAM
@@ -132,8 +133,8 @@ fn (mut m Memory) load16(address u32) u16 {
 		((0x80000000 <= address) && (address < 0x81800000)) {
 			offset := (address << 1) >> 1
 			mut value := u16(0)
-			value |= u16(m.mem2[offset + 0]) << 8
-            value |= u16(m.mem2[offset + 1]) << 0
+			value |= u16(m.mem1[offset + 0]) << 8
+            value |= u16(m.mem1[offset + 1]) << 0
 			return value
 		} 
 		((0xcc005000 <= address) && (address < 0xcc005200)) { return m.dsp.load16(address) }
@@ -173,6 +174,7 @@ fn (mut m Memory) store32(address u32, value u32) {
 		((0xcc003000 <= address) && (address < 0xcc003100)) { m.processor.store32(address, value) }
 		((0xcc006800 <= address) && (address < 0xcc006880)) { m.external.store32(address, value) }
 		address == 0xcc006480 {
+			m.dump_memory()
 			if value != 0 {
 				addr := (value << 1) >> 1
 				println(m.mem1[addr..addr+0x1000].bytestr())
