@@ -93,7 +93,7 @@ fn (mut p PPC) op_mulli() {
 	d := p.opcode.b6_10
 	a := p.opcode.b11_15
 	simm := p.opcode.b16_31
-    result := u64(i64(int(p.gprs[a])) * i64(int(simm)))
+    result := u64(p.gprs[a]) * u64(simm) // TODO: make sure we dont need to cast to int before
 	p.gprs[d] = u32(result & 0xffffffff)
 }
 
@@ -175,7 +175,7 @@ fn (mut p PPC) op_bx() {
 	}
 	p.pc = exts26(li)
 	if aa == false {
-		p.pc += cur_pc - 4
+		p.pc += (cur_pc - 4)
 	}
 	p.logger.log("New pc ${p.pc:08x}", "Args")
 }
@@ -207,8 +207,8 @@ fn (mut p PPC) op_bcx() {
 	bo := p.opcode.b6_10
 	bi := p.opcode.b11_15
 	bd := p.opcode.b16_29
-	lk := p.opcode.b31
 	aa := p.opcode.b30
+	lk := p.opcode.b31
 
 	if (bo & 0b00100) == 0 {
         p.set_sprs(ctr_r, p.get_sprs(ctr_r) - 1)
@@ -221,7 +221,7 @@ fn (mut p PPC) op_bcx() {
 		cur_pc := p.pc
 		p.pc = exts16(bd << 2)
         if aa == false {
-			p.pc += cur_pc - 4
+			p.pc += (cur_pc - 4)
 		}
         if lk == true {
             p.set_sprs(lr_r, cur_pc)
@@ -281,9 +281,11 @@ fn (mut p PPC) op_bcctrx() {
 		if lk == true {
 			p.set_sprs(lr_r, p.pc)
 		}
-		p.pc = p.get_sprs(ctr_r) << 2
+		p.pc = (p.get_sprs(ctr_r) >> 2) << 2
 	}
 }
+
+// TODO: continue checking
 
 fn (mut p PPC) op_srawx() {
     s := p.opcode.b6_10
@@ -500,7 +502,7 @@ fn (mut p PPC) op_cmpl() {
 	a := p.gprs[p.opcode.b11_15]
 	b := p.gprs[p.opcode.b16_20]
 	crfd := p.opcode.b6_10 >> 2
-	p.set_conditions_cmp(a, b, crfd, false) // ??? TODO: is thhis right
+	p.set_conditions_cmp(a, b, crfd, false)
 }
 
 fn (mut p PPC) op_subfx() {

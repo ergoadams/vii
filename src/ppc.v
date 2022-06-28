@@ -196,12 +196,9 @@ fn (mut p PPC) decode_and_execute() {
 		0b001101 { p.op_addicr() p.opcode_name = "addicr" }
 		0b001110 { p.op_addi() p.opcode_name = "addi" }
 		0b001111 { p.op_addis() p.opcode_name = "addis" }
-		0b010010 { p.op_bx() p.opcode_name = "bx" }
-		0b011000 { p.op_ori() p.opcode_name = "ori" }
-		0b011001 { p.op_oris() p.opcode_name = "oris" }
-		0b011010 { p.op_xori() p.opcode_name = "xori" }
 		0b010000 { p.op_bcx() p.opcode_name = "bcx" }
 		0b010001 { p.op_sc() p.opcode_name = "sc" }
+		0b010010 { p.op_bx() p.opcode_name = "bx" }
 		0b010011 {
 			match p.opcode.secondary {
 				0b0000010000 { p.op_bclrx() p.opcode_name = "bclrx" }	
@@ -213,6 +210,9 @@ fn (mut p PPC) decode_and_execute() {
 		}
 		0b010100 { p.op_rlwimix() p.opcode_name = "rlwimix"}
 		0b010101 { p.op_rlwinmx() p.opcode_name = "rlwinmx"}
+		0b011000 { p.op_ori() p.opcode_name = "ori" }
+		0b011001 { p.op_oris() p.opcode_name = "oris" }
+		0b011010 { p.op_xori() p.opcode_name = "xori" }
 		0b011100 { p.op_andi() p.opcode_name = "andi"}
 		0b011101 { p.op_andis() p.opcode_name = "andis"}
 		0b011111 { 
