@@ -109,8 +109,9 @@ fn (mut m Memory) load32(address u32) u32 {
             value |= u32(m.mem1[offset + 3]) << 0
 			return value
 		} 
+		((0x90000000 <= address) && (address < 0x94000000)) ||
 		((0xD0000000 <= address) && (address < 0xD4000000)) {
-			offset := address - 0xD0000000
+			offset := (address << 4) >> 4
 			mut value := u32(0)
 			value |= u32(m.mem2[offset + 0]) << 24
             value |= u32(m.mem2[offset + 1]) << 16
@@ -161,8 +162,22 @@ fn (mut m Memory) store32(address u32, value u32) {
             m.mem1[offset + 2] = u8((value & 0xFF00) >> 8)
             m.mem1[offset + 3] = u8((value & 0xFF) >> 0)
 		} 
+		((0x90000000 <= address) && (address < 0x94000000)) ||
+		((0xD0000000 <= address) && (address < 0xD4000000)) {
+			offset := (address << 4) >> 4
+			m.mem2[offset + 0] = u8((value & 0xFF000000) >> 24)
+            m.mem2[offset + 1] = u8((value & 0xFF0000) >> 16)
+            m.mem2[offset + 2] = u8((value & 0xFF00) >> 8)
+            m.mem2[offset + 3] = u8((value & 0xFF) >> 0)
+		} 
 		((0xcc003000 <= address) && (address < 0xcc003100)) { m.processor.store32(address, value) }
 		((0xcc006800 <= address) && (address < 0xcc006880)) { m.external.store32(address, value) }
+		address == 0xcc006480 {
+			if value != 0 {
+				addr := (value << 1) >> 1
+				println(m.mem1[addr..addr+0x1000].bytestr())
+			}
+		}
 		else { m.logger.log("Unhandled store32 addr ${address:08x} value ${value:08x}", "Critical") }
 	}
 }

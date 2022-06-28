@@ -201,9 +201,11 @@ fn (mut p PPC) decode_and_execute() {
 		0b010010 { p.op_bx() p.opcode_name = "bx" }
 		0b010011 {
 			match p.opcode.secondary {
+				0b0000000000 { p.op_mcrf() p.opcode_name = "mcrf" }	
 				0b0000010000 { p.op_bclrx() p.opcode_name = "bclrx" }	
 				0b0000110010 { p.op_rfi() p.opcode_name = "rfi" }	
 				0b0010010110 { p.op_isync() p.opcode_name = "isync" }	
+				0b0011000001 { p.op_crxor() p.opcode_name = "crxor" }	
 				0b1000010000 { p.op_bcctrx() p.opcode_name = "bcctrx" }	
 				else { p.logger.log("${p.pc:08x}(${p.instruction_count}) Unhandled 0b010011 (19) secondary 0b${p.opcode.secondary:010b} (${p.opcode.secondary}) opcode ${p.opcode.value:08x}", "Critical") p.running = false }
 			}
@@ -260,9 +262,11 @@ fn (mut p PPC) decode_and_execute() {
 		0b100000 { p.op_lwz() p.opcode_name = "lwz" }
 		0b100001 { p.op_lwzu() p.opcode_name = "lwzu" }
 		0b100010 { p.op_lbz() p.opcode_name = "lbz" }
+		0b100011 { p.op_lbzu() p.opcode_name = "lbzu" }
 		0b100100 { p.op_stw() p.opcode_name = "stw" }
 		0b100101 { p.op_stwu() p.opcode_name = "stwu" }
 		0b100110 { p.op_stb() p.opcode_name = "stb" }
+		0b100111 { p.op_stbu() p.opcode_name = "stbu" }
 		0b101000 { p.op_lhz() p.opcode_name = "lhz" }
 		0b101010 { p.op_lha() p.opcode_name = "lha" }
 		0b101100 { p.op_sth() p.opcode_name = "sth" }
@@ -270,11 +274,19 @@ fn (mut p PPC) decode_and_execute() {
 		0b101111 { p.op_stmw() p.opcode_name = "stmw" }
 		0b110000 { p.op_lfs() p.opcode_name = "lfs" }
 		0b110010 { p.op_lfd() p.opcode_name = "lfd" }
+		0b110110 { p.op_stfd() p.opcode_name = "stfd" }
 		0b111000 { p.op_psq_l() p.opcode_name = "psq_l" }
 		0b111111 {
 			match p.opcode.secondary {
+				0b0000000000 { p.op_fcmpu() p.opcode_name = "fcmpu" }
+				0b0000010010 { p.op_fdivx() p.opcode_name = "fdivx" }
+				0b0000010100 { p.op_fsubx() p.opcode_name = "fsubx" }
+				0b0000010101 { p.op_faddx() p.opcode_name = "faddx" }
+				0b0000011001 { p.op_fmulx() p.opcode_name = "fmulx" }
 				0b0000100110 { p.op_mtfsb1x() p.opcode_name = "mtfsb1x" }
+				0b0000101000 { p.op_fnegx() p.opcode_name = "fnegx" }
 				0b0001001000 { p.op_fmrx() p.opcode_name = "fmrx" }
+				0b0100001000 { p.op_fabsx() p.opcode_name = "fabsx" }
 				0b1011000111 { p.op_mtfsfx() p.opcode_name = "mtfsfx" }
 				else { p.logger.log("${p.pc:08x}(${p.instruction_count})  Unhandled 0b111111 (63) secondary 0b${p.opcode.secondary:010b} (${p.opcode.secondary}) opcode ${p.opcode.value:08x}", "Critical") p.running = false }
 			}

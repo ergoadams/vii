@@ -236,6 +236,14 @@ fn (mut p PPC) op_sc() {
 	p.exception(Exception.syscall)
 }
 
+fn (mut p PPC) op_mcrf() {
+	crfd := p.opcode.b6_10 >> 2
+	crfs := p.opcode.b11_15 >> 2
+	result := (p.cr >> ((7-crfs)*4)) & 0b1111
+	p.cr &= ~(0b1111 << ((7-crfd)*4))
+	p.cr |= result << ((7-crfd)*4)
+}
+
 fn (mut p PPC) op_bclrx() {
 	bo := p.opcode.b6_10
 	bi := p.opcode.b11_15
@@ -271,6 +279,15 @@ fn (mut p PPC) op_isync() {
     // Nothing for us right now
 }
 
+fn (mut p PPC) op_crxor() {
+    crbd := p.opcode.b6_10
+    crba := p.opcode.b11_15
+    crbb := p.opcode.b16_20
+	p.cr &= ~(u32(1) << (31 - crbd)) // Clear the bit in condition register
+	result := ((p.cr >> (31 - crba)) & 1) ^ ((p.cr >> (31 - crbb)) & 1)
+	p.cr |= result << (31 - crbd)
+}
+
 fn (mut p PPC) op_bcctrx() {
 	bo := p.opcode.b6_10
 	bi := p.opcode.b11_15
@@ -285,21 +302,24 @@ fn (mut p PPC) op_bcctrx() {
 	}
 }
 
-// TODO: continue checking
-
 fn (mut p PPC) op_srawx() {
     s := p.opcode.b6_10
     a := p.opcode.b11_15
-    sh := p.opcode.b16_20
+    b := p.opcode.b16_20
 	rc := p.opcode.b31
-	r := rotl(p.gprs[s], 32 - sh)
-	m := mask(sh, 31)
+
+	n := p.gprs[b] & 0b11111
+	r := rotl(p.gprs[s], 32 - n)
+	mut m := u32(0)
+	if ((p.gprs[b] >> 5) & 1) == 0 {
+		m = mask(n, 31)
+	}
 	mut s2 := p.gprs[s] >> 31
-	for i in 1..32 {
-		s2 |= ((s2 & 1) << i)
+	if s2 == 1 {
+		s2 = u32(0xffffffff)
 	}
 	p.gprs[a] = (r & m) | (s2 & ~m)
-	p.xer.ca = s2 & (r & ~m) != 0
+	p.xer.ca = (s2 & (r & ~m)) != 0
 	if rc == true {
 		p.set_conditions(p.gprs[a], 0)
 	}
@@ -308,14 +328,13 @@ fn (mut p PPC) op_srawx() {
 fn (mut p PPC) op_srawix() {
     s := p.opcode.b6_10
     a := p.opcode.b11_15
-    b := p.opcode.b16_20
+    sh := p.opcode.b16_20
 	rc := p.opcode.b31
-	n := p.gprs[b] & 0b11111
-	r := rotl(p.gprs[s], 32 - n)
-	m := mask(n, 31)
+	r := rotl(p.gprs[s], 32 - sh)
+	m := mask(sh, 31)
 	mut s2 := p.gprs[s] >> 31
-	for i in 1..32 {
-		s2 |= ((s2 & 1) << i)
+	if s2 == 1 {
+		s2 = u32(0xffffffff)
 	}
 	p.gprs[a] = (r & m) | (s2 & ~m)
 	p.xer.ca = ((s2 & 1) != 0) && ((r & ~m) != 0)
@@ -348,13 +367,9 @@ fn (mut p PPC) op_rlwinmx() {
 	rc := p.opcode.b31
     r := rotl(p.gprs[s], sh)
 	m := mask(mb, me)
-	p.logger.log("rotl ${p.gprs[s]:08x} by ${sh} = ${r:08x}", "Args")
-	p.logger.log("mask ${mb} to ${me} = ${m:08x}", "Args")
 	p.gprs[a] = r & m
-	p.logger.log("${r:08x} & ${m:08x} = ${p.gprs[a]:08x}(reg ${a})", "Args")
 	if rc == true {
-		p.set_conditions(r & m, 0)
-		p.logger.log("Setting conditions", "Args")
+		p.set_conditions(p.gprs[a], 0)
 	}
 }
 
@@ -382,7 +397,7 @@ fn (mut p PPC) op_cmp() {
 	a := p.gprs[p.opcode.b11_15]
 	b := p.gprs[p.opcode.b16_20]
 	crfd := p.opcode.b6_10 >> 2
-	p.set_conditions(u32(int(a) - int(b)), crfd)
+	p.set_conditions_cmp(a, b, crfd, true)
 }
 
 fn (mut p PPC) op_subfcx() {
@@ -462,7 +477,13 @@ fn (mut p PPC) op_slwx() {
 	b := p.opcode.b16_20
 	rc := p.opcode.b31
 	n := p.gprs[b] & 0b11111
-	p.gprs[a] = p.gprs[s] << n
+	r := rotl(p.gprs[s], n)
+	mut m := u32(0)
+	if ((p.gprs[b] >> 5) & 1) == 0 {
+		m = mask(0, 31 - n)
+	}
+	p.gprs[a] = r & m
+
 	if rc == true {
 		p.set_conditions(p.gprs[a], 0)
 	}
@@ -499,9 +520,9 @@ fn (mut p PPC) op_andx() {
 }
 
 fn (mut p PPC) op_cmpl() {
+	crfd := p.opcode.b6_10 >> 2
 	a := p.gprs[p.opcode.b11_15]
 	b := p.gprs[p.opcode.b16_20]
-	crfd := p.opcode.b6_10 >> 2
 	p.set_conditions_cmp(a, b, crfd, false)
 }
 
@@ -529,7 +550,7 @@ fn (mut p PPC) op_andcx() {
 	a :=p.opcode.b11_15
 	b := p.opcode.b16_20
 	rc := p.opcode.b31
-	p.gprs[a] = p.gprs[s] & (~p.gprs[b])
+	p.gprs[a] = p.gprs[s] & ~p.gprs[b]
 	p.logger.log("${p.gprs[s]:08x}(reg ${s}) & ~${p.gprs[b]:08x}(reg ${b}) = ${p.gprs[a]:08x}(reg ${a})", "Args")
 	if rc == true {
 		p.set_conditions(p.gprs[a], 0)
@@ -553,7 +574,7 @@ fn (mut p PPC) op_negx() {
 	oe := ((p.opcode.b21_25 >> 4) & 1) != 0
 	rc := p.opcode.b31
 	result := u64(~p.gprs[a]) + 1
-	p.gprs[d] = u32(result & 0xffffffff)
+	p.gprs[d] = ~p.gprs[a] + 1
 	if rc == true {
 		p.set_conditions(p.gprs[d], 0)
 	}
@@ -640,13 +661,12 @@ fn (mut p PPC) op_mtcrf() {
 		}
 	}
 	p.cr = (p.gprs[s] & mask) | (p.cr & ~mask)
-    
 }
 
 fn (mut p PPC) op_mtmsr() {
-	d := p.opcode.b6_10
-    p.msr.set_value(p.gprs[d])
-	p.logger.log("Setting msr to ${p.msr.value:08x}(reg ${d})", "Args")
+	s := p.opcode.b6_10
+    p.msr.set_value(p.gprs[s])
+	p.logger.log("Setting msr to ${p.msr.value:08x}(reg ${s})", "Args")
 }
 
 fn (mut p PPC) op_stwx() {
@@ -717,8 +737,8 @@ fn (mut p PPC) op_addx() {
 	d := p.opcode.b6_10
 	a := p.opcode.b11_15
 	b := p.opcode.b16_20
-	rc := p.opcode.b31
 	oe := (p.opcode.b21_25 >> 4) != 0
+	rc := p.opcode.b31
 	p.gprs[d] = p.gprs[a] + p.gprs[b]
 	p.logger.log("${p.gprs[a]}(reg ${a}) + ${p.gprs[b]}(reg ${b}) = ${p.gprs[d]}(stored to reg ${d})", "Args")
 	if oe == true {
@@ -738,7 +758,6 @@ fn (mut p PPC) op_lhzx() {
 	if a != 0 {
 		addr += p.gprs[a]
 	}
-	println("${addr:08x}")
 	p.gprs[d] = u32(p.memory.load16(addr))
 }
 
@@ -757,7 +776,7 @@ fn (mut p PPC) op_mftb() {
 	if (p.instruction_count / 12) < p.tbl {
 		p.tbu += 1
 	}
-	p.tbl = p.instruction_count / 12
+	p.tbl = p.instruction_count / 12 // TODO: definitely wrong
     if index == 268 {
 		p.gprs[d] = p.tbl
 	} else if index == 269 {
@@ -775,7 +794,7 @@ fn (mut p PPC) op_orx() {
 	p.gprs[a] = p.gprs[s] | p.gprs[b]
 	p.logger.log("${p.gprs[s]:08x}(reg ${s}) | ${p.gprs[b]:08x}(reg ${b}) = ${p.gprs[a]:08x}(stored to reg ${a})", "Args")
 	if rc == true {
-		p.set_conditions(p.gprs[s] | p.gprs[b], 0)
+		p.set_conditions(p.gprs[a], 0)
 		p.logger.log("Setting conditions", "Args")
 	}
 }
@@ -814,7 +833,12 @@ fn (mut p PPC) op_srwx() {
 	b := p.opcode.b16_20
 	rc := p.opcode.b31
 	n := p.gprs[b] & 0b11111
-	p.gprs[a] = p.gprs[s] >> n
+	r := rotl(p.gprs[s], 32 - n)
+	mut m := u32(0)
+	if ((p.gprs[b] >> 5) & 1) == 0 {
+		m = mask(n, 31)
+	}
+	p.gprs[a] = r & m
 	if rc == true {
 		p.set_conditions(p.gprs[a], 0)
 	}
@@ -859,8 +883,17 @@ fn (mut p PPC) op_lbz() {
 	if a != 0 {
 		addr += p.gprs[a]
 	}
-	p.gprs[d] = p.memory.load8(addr)
+	p.gprs[d] = u32(p.memory.load8(addr))
 	p.logger.log("Setting reg${d} to ${p.gprs[d]:02x} (loaded from ${addr:08x})", "Args")
+}
+
+fn (mut p PPC) op_lbzu() {
+	d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	d2 := p.opcode.b16_31
+	mut addr := exts16(d2) + p.gprs[a]
+	p.gprs[d] = u32(p.memory.load8(addr))
+	p.gprs[a] = addr
 }
 
 fn (mut p PPC) op_stw() {
@@ -897,6 +930,15 @@ fn (mut p PPC) op_stb() {
 	}
 	p.logger.log("Storing ${p.gprs[s]:02x}(reg ${s}) to ${addr:08x}", "Args")
 	p.memory.store8(addr, u8(p.gprs[s] & 0xff))
+}
+
+fn (mut p PPC) op_stbu() {
+	s := p.opcode.b6_10
+	a := p.opcode.b11_15
+	d := p.opcode.b16_31
+	addr := exts16(d) + p.gprs[a]
+	p.memory.store8(addr, u8(p.gprs[s] & 0xff))
+	p.gprs[a] = addr
 }
 
 fn (mut p PPC) op_lhz() {
@@ -950,7 +992,7 @@ fn (mut p PPC) op_lmw() {
 }
 
 fn (mut p PPC) op_stmw() {
-	mut s := p.opcode.b6_10
+	s := p.opcode.b6_10
 	a := p.opcode.b11_15
 	d := p.opcode.b16_31
 	mut addr := exts16(d)
@@ -986,6 +1028,18 @@ fn (mut p PPC) op_lfd() {
 	}
 	p.fprs[d].ps0 = f32(p.memory.load32(addr))
 	p.fprs[d].ps1 = f32(p.memory.load32(addr + 4))
+}
+
+fn (mut p PPC) op_stfd() {
+	s := p.opcode.b6_10
+	a := p.opcode.b11_15
+	d := p.opcode.b16_31
+	mut addr := exts16(d)
+	if a != 0 {
+		addr += p.gprs[a]
+	}
+	p.memory.store32(addr, u32(p.fprs[s].ps0))
+	p.memory.store32(addr + 4, u32(p.fprs[s].ps1))
 }
 
 fn (mut p PPC) op_psq_l() {
@@ -1030,6 +1084,51 @@ fn (mut p PPC) op_psq_l() {
 	}
 }
 
+fn (mut p PPC) op_fcmpu() {
+	/*crfd := p.opcode.b6_10 >> 2
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled fcmpu")
+}
+
+fn (mut p PPC) op_fdivx() {
+	/*d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled fdivx ${p.pc:08x}")
+}
+
+fn (mut p PPC) op_fsubx() {
+	/*d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled fsubx")
+}
+
+fn (mut p PPC) op_faddx() {
+	/*d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled faddx")
+}
+
+fn (mut p PPC) op_fmulx() {
+	/*d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	c := p.opcode.b21_25
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled fmulx")
+}
+
 fn (mut p PPC) op_mtfsb1x() {
 	crbd := p.opcode.b6_10
 	rc := p.opcode.b31
@@ -1037,6 +1136,15 @@ fn (mut p PPC) op_mtfsb1x() {
 	if rc == true {
 		p.logger.log("mtfsb1x should set conditions", "Critical")
 	}
+}
+
+fn (mut p PPC) op_fnegx() {
+	/*d := p.opcode.b6_10
+	a := p.opcode.b11_15
+	b := p.opcode.b16_20
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled fnegx")
 }
 
 fn (mut p PPC) op_fmrx() {
@@ -1048,6 +1156,14 @@ fn (mut p PPC) op_fmrx() {
 	if rc == true {
 		p.logger.log("fmrx should set conditions", "Critical")
 	}
+}
+
+fn (mut p PPC) op_fabsx() {
+	/*d := p.opcode.b6_10
+	b := p.opcode.b16_20
+	rc := p.opcode.b31*/
+	// TODO: make this
+	println("Unhandled fabsx")
 }
 
 fn (mut p PPC) op_mtfsfx() {
