@@ -4,11 +4,9 @@
 import os
 
 fn main() {
+	mut logging_enabled := true
 	mut logger := Logger{}
-	logging_enabled := false
-	tracing_enabled := false
-	logger.init(logging_enabled, tracing_enabled)
-
+	logger.init(logging_enabled)
 	mut dol_name := "dols/triangle.dol"
 	if os.args.len == 2 {
 		print("Using provided dol path ")
@@ -18,17 +16,12 @@ fn main() {
 		print("Too many OS args ")
 		println(os.args)
 	} 
-
-	mut memory := Memory{logger: 0}
-	memory.init(&logger)
-
+	mut memory := Memory{}
+	memory.init(logger)
 	entry_point := memory.load_dol(dol_name)
-	//memory.dump_memory()
-
-	mut broadway := PPC{memory: 0, logger: 0}
-	broadway.init(&memory, &logger)
+	mut broadway := Broadway{}
+	broadway.init(logger, memory)
 	broadway.set_entry_point(entry_point)
-	logger.log("Begin execution", "Broadway")
 
 	for {
 		if broadway.running == true {
